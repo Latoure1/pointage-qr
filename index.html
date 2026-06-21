@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#16243F">
+<link rel="manifest" href="manifest.json">
+<title>Pointage</title>
+<script src="https://unpkg.com/html5-qrcode" defer></script>
+<style>
+  :root{
+    --navy:#16243F; --navy-2:#1E3358; --orange:#E07B2C; --orange-d:#c4691f;
+    --paper:#F6F4EF; --ink:#1b2436; --muted:#6b7890; --line:#e3e0d8;
+    --ok:#1f8a52; --err:#c43d2e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:var(--paper);color:var(--ink);
+    min-height:100dvh;display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) 1.25rem env(safe-area-inset-bottom);
+  }
+  header{padding:1.5rem 0 .5rem;display:flex;align-items:center;gap:.6rem}
+  .logo{width:34px;height:34px;border-radius:9px;background:var(--navy);
+    display:grid;place-items:center;color:var(--orange);font-weight:800}
+  .brand{font-weight:700;letter-spacing:.02em}
+  main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:1.5rem;padding-bottom:2rem}
+  .screen{display:none}.screen.active{display:flex;flex-direction:column;gap:1.25rem}
+  h1{font-size:1.6rem;line-height:1.2}
+  h1 .name{color:var(--orange)}
+  .sub{color:var(--muted);font-size:1rem}
+  label{display:block;font-weight:600;margin-bottom:.4rem;font-size:.95rem}
+  input{
+    width:100%;padding:.95rem 1rem;border:1.5px solid var(--line);border-radius:14px;
+    font-size:1.05rem;background:#fff;color:var(--ink)
+  }
+  input:focus{outline:3px solid rgba(224,123,44,.35);border-color:var(--orange)}
+  .btn{
+    border:0;border-radius:16px;padding:1.15rem;font-size:1.15rem;font-weight:700;
+    cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:.6rem
+  }
+  .btn:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+  .btn-in{background:var(--navy);color:#fff}
+  .btn-out{background:#fff;color:var(--navy);border:2px solid var(--navy)}
+  .btn-primary{background:var(--orange);color:#fff}
+  .btn:active{transform:translateY(1px)}
+  .link{background:none;border:0;color:var(--muted);text-decoration:underline;
+    font-size:.9rem;cursor:pointer;padding:.5rem}
+  /* scanner */
+  #reader{width:100%;border-radius:18px;overflow:hidden;border:2px solid var(--navy)}
+  .scan-title{display:flex;align-items:center;justify-content:space-between}
+  /* result */
+  .result-card{border-radius:20px;padding:2rem 1.5rem;text-align:center;color:#fff}
+  .result-card.ok{background:var(--ok)}
+  .result-card.err{background:var(--err)}
+  .result-card .big{font-size:1.5rem;font-weight:800;margin:.3rem 0}
+  .result-card .ico{font-size:3rem}
+  .badge{display:inline-block;background:rgba(0,0,0,.06);padding:.4rem .8rem;
+    border-radius:99px;font-size:.85rem;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:.8rem;padding:1rem 0}
+  /* statut géolocalisation */
+  .geo{display:flex;align-items:center;gap:.6rem;padding:.8rem 1rem;border-radius:14px;
+    font-size:.92rem;line-height:1.35}
+  .geo .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .geo.ok{background:rgba(31,138,82,.10);color:#1f6e45}
+  .geo.ok .dot{background:var(--ok)}
+  .geo.warn{background:rgba(224,123,44,.12);color:#a85a18}
+  .geo.warn .dot{background:var(--orange)}
+  .geo.err{background:rgba(196,61,46,.10);color:#a3261a}
+  .geo.err .dot{background:var(--err)}
+  .geo button{margin-left:auto;background:var(--navy);color:#fff;border:0;border-radius:10px;
+    padding:.55rem .8rem;font-size:.85rem;font-weight:700;cursor:pointer;flex:none}
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">P</div>
+    <span class="brand">Pointage présence</span>
+  </header>
+
+  <main>
+    <!-- ÉCRAN 1 : configuration de l'identité (première ouverture) -->
+    <section id="screen-setup" class="screen">
+      <div>
+        <h1>Configurer mon profil</h1>
+        <p class="sub">Une seule fois. Ces infos restent sur ton téléphone.</p>
+      </div>
+      <div>
+        <label for="mat">Matricule</label>
+        <input id="mat" inputmode="text" autocomplete="off" placeholder="ex : EMP-014">
+      </div>
+      <div>
+        <label for="nom">Nom complet</label>
+        <input id="nom" autocomplete="name" placeholder="ex : Awa Koné">
+      </div>
+      <button class="btn btn-primary" id="save-id">Enregistrer</button>
+    </section>
+
+    <!-- ÉCRAN 2 : accueil -->
+    <section id="screen-home" class="screen">
+      <div>
+        <h1>Bonjour <span class="name" id="hello"></span></h1>
+        <p class="sub">Choisis ton action, puis vise le QR à l'accueil.</p>
+      </div>
+      <div class="geo warn" id="geo"><span class="dot"></span><span id="geo-txt">Vérification de la localisation…</span></div>
+      <button class="btn btn-in" data-type="in">↓ Pointer mon arrivée</button>
+      <button class="btn btn-out" data-type="out">↑ Pointer mon départ</button>
+      <button class="link" id="edit-id">Modifier mon identité</button>
+    </section>
+
+    <!-- ÉCRAN 3 : scanner -->
+    <section id="screen-scan" class="screen">
+      <div class="scan-title">
+        <h1 id="scan-label">Arrivée</h1>
+        <button class="link" id="cancel-scan">Annuler</button>
+      </div>
+      <div id="reader"></div>
+      <p class="sub" id="scan-status">Vise le QR code affiché à l'accueil…</p>
+    </section>
+
+    <!-- ÉCRAN 4 : résultat -->
+    <section id="screen-result" class="screen">
+      <div class="result-card" id="result-card">
+        <div class="ico" id="result-ico">✓</div>
+        <div class="big" id="result-msg"></div>
+        <div id="result-time"></div>
+      </div>
+      <button class="btn btn-primary" id="back-home">Terminé</button>
+    </section>
+  </main>
+
+  <footer>Données enregistrées dans le registre de l'entreprise</footer>
+
+<script>
+  /* ⬇️ REMPLACE par l'URL de TON déploiement Apps Script (finit par /exec) */
+  const API_URL = "https://script.google.com/macros/s/AKfycbyaAEMnZ8J2oPgovbCNa6zfzfF-82cWyPF_c8tmapWaoqAxVOaJ4CDVXuZEiYXAI19D/exec";
+
+  const $ = function(id){ return document.getElementById(id); };
+  const screens = ['setup','home','scan','result'];
+  function show(name){
+    screens.forEach(function(s){ $('screen-'+s).classList.toggle('active', s===name); });
+  }
+
+  /* ---- Identité (localStorage) ---- */
+  function getId(){ try{ return JSON.parse(localStorage.getItem('pointage_id')); }catch(e){ return null; } }
+  function setId(o){ localStorage.setItem('pointage_id', JSON.stringify(o)); }
+
+  function boot(){
+    const id = getId();
+    if(!id){ show('setup'); }
+    else { $('hello').textContent = id.nom.split(' ')[0]; show('home'); primeGeo(); }
+  }
+
+  $('save-id').onclick = function(){
+    const mat = $('mat').value.trim(), nom = $('nom').value.trim();
+    if(!mat || !nom){ alert('Renseigne ton matricule et ton nom.'); return; }
+    setId({matricule:mat, nom:nom});
+    boot();
+  };
+  $('edit-id').onclick = function(){
+    const id = getId();
+    $('mat').value = id ? id.matricule : '';
+    $('nom').value = id ? id.nom : '';
+    show('setup');
+  };
+
+  /* ---- Scan ---- */
+  let html5Qr = null, pendingType = 'in', busy = false;
+
+  document.querySelectorAll('[data-type]').forEach(function(b){
+    b.onclick = function(){ startScan(b.getAttribute('data-type')); };
+  });
+  $('cancel-scan').onclick = stopScan;
+  $('back-home').onclick = function(){ show('home'); };
+
+  function startScan(type){
+    pendingType = type; busy = false;
+    $('scan-label').textContent = (type === 'out' ? 'Départ' : 'Arrivée');
+    $('scan-status').textContent = 'Vise le QR code affiché à l\'accueil…';
+    show('scan');
+    html5Qr = new Html5Qrcode('reader');
+    html5Qr.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: 240 },
+      onScan,
+      function(){ /* ignore les frames sans QR */ }
+    ).catch(function(err){
+      $('scan-status').textContent = 'Caméra inaccessible : ' + err;
+    });
+  }
+
+  function stopScan(){
+    if(html5Qr){
+      html5Qr.stop().then(function(){ html5Qr.clear(); html5Qr=null; }).catch(function(){});
+    }
+    show('home');
+  }
+
+  function onScan(token){
+    if(busy) return;
+    busy = true;
+    $('scan-status').textContent = 'Validation en cours…';
+    if(html5Qr){ html5Qr.stop().then(function(){ html5Qr.clear(); html5Qr=null; }).catch(function(){}); }
+    getGeo(function(coords){ sendPointage(token, coords); });
+  }
+
+  /* ---- Géolocalisation : demande à l'ouverture + badge de statut ---- */
+  let lastPos = null;
+
+  function setGeoBadge(state, txt, withButton){
+    const g = $('geo');
+    g.className = 'geo ' + state;
+    $('geo-txt').textContent = txt;
+    const old = g.querySelector('button');
+    if(old) old.remove();
+    if(withButton){
+      const b = document.createElement('button');
+      b.textContent = 'Autoriser';
+      b.onclick = function(){ requestGeo(true); };
+      g.appendChild(b);
+    }
+  }
+
+  function requestGeo(userInitiated){
+    if(!navigator.geolocation){
+      setGeoBadge('err', 'Localisation non supportée par ce navigateur.', false);
+      return;
+    }
+    setGeoBadge('warn', 'Localisation en cours…', false);
+    navigator.geolocation.getCurrentPosition(
+      function(p){
+        lastPos = {lat:p.coords.latitude, lng:p.coords.longitude};
+        setGeoBadge('ok', 'Localisation activée — tu peux pointer.', false);
+      },
+      function(err){
+        if(err.code === 1){ // PERMISSION_DENIED
+          setGeoBadge('err',
+            userInitiated
+              ? 'Refusée. Réactive la localisation dans les réglages du navigateur.'
+              : 'Localisation requise pour pointer.',
+            true);
+        } else {
+          setGeoBadge('warn', 'Position indisponible. Réessaie près d\'une fenêtre.', true);
+        }
+      },
+      { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
+    );
+  }
+
+  // Déclenchée à l'ouverture : vérifie l'état puis demande
+  function primeGeo(){
+    if(navigator.permissions && navigator.permissions.query){
+      navigator.permissions.query({name:'geolocation'}).then(function(st){
+        if(st.state === 'denied'){
+          setGeoBadge('err', 'Localisation bloquée. Réactive-la dans les réglages.', true);
+        } else {
+          requestGeo(false); // 'granted' ou 'prompt' -> on (re)récupère / déclenche le prompt
+        }
+      }).catch(function(){ requestGeo(false); });
+    } else {
+      requestGeo(false); // Safari : pas d'API Permissions, on tente direct
+    }
+  }
+
+  // Position fraîche au moment du scan, avec repli sur la dernière connue
+  function getGeo(cb){
+    if(!navigator.geolocation){ cb(lastPos || {}); return; }
+    navigator.geolocation.getCurrentPosition(
+      function(p){ lastPos = {lat:p.coords.latitude, lng:p.coords.longitude}; cb(lastPos); },
+      function(){ cb(lastPos || {}); },   // échec : on envoie la dernière connue (le serveur tranchera)
+      { enableHighAccuracy:true, timeout:6000, maximumAge:15000 }
+    );
+  }
+
+  async function sendPointage(token, coords){
+    const id = getId();
+    const payload = {
+      matricule:id.matricule, nom:id.nom, token:token, type:pendingType,
+      lat:coords.lat || '', lng:coords.lng || ''
+    };
+    try{
+      // Content-Type "text/plain" => requête simple, pas de preflight CORS avec Apps Script
+      const r = await fetch(API_URL, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      showResult(data);
+    }catch(e){
+      showResult({status:'error', message:'Connexion impossible. Réessaie.'});
+    }
+  }
+
+  function showResult(data){
+    const ok = data.status === 'ok';
+    const card = $('result-card');
+    card.className = 'result-card ' + (ok ? 'ok' : 'err');
+    $('result-ico').textContent = ok ? '✓' : '✕';
+    $('result-msg').textContent = data.message || (ok ? 'Pointage enregistré' : 'Échec');
+    $('result-time').textContent = ok && data.time ? 'à ' + data.time : '';
+    show('result');
+  }
+
+  boot();
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+</script>
+</body>
+</html>
