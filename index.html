@@ -83,8 +83,8 @@
     <!-- ÉCRAN 1 : configuration de l'identité (première ouverture) -->
     <section id="screen-setup" class="screen">
       <div>
-        <h1>Configurer mon profil</h1>
-        <p class="sub">Une seule fois. Ces infos restent sur ton téléphone.</p>
+        <h1 id="setup-title">Configurer mon profil</h1>
+        <p class="sub" id="setup-sub">Une seule fois. Ces infos restent sur ton téléphone.</p>
       </div>
       <div>
         <label for="mat">Matricule</label>
@@ -95,6 +95,7 @@
         <input id="nom" autocomplete="name" placeholder="ex : Awa Koné">
       </div>
       <button class="btn btn-primary" id="save-id">Enregistrer</button>
+      <button class="link" id="cancel-edit" style="display:none">Annuler</button>
     </section>
 
     <!-- ÉCRAN 2 : accueil -->
@@ -134,7 +135,7 @@
 
 <script>
   /* ⬇️ REMPLACE par l'URL de TON déploiement Apps Script (finit par /exec) */
-  const API_URL = "https://script.google.com/macros/s/AKfycbyaAEMnZ8J2oPgovbCNa6zfzfF-82cWyPF_c8tmapWaoqAxVOaJ4CDVXuZEiYXAI19D/exec";
+  const API_URL = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec";
 
   const $ = function(id){ return document.getElementById(id); };
   const screens = ['setup','home','scan','result'];
@@ -148,8 +149,27 @@
 
   function boot(){
     const id = getId();
-    if(!id){ show('setup'); }
+    if(!id){ openSetup('first'); }
     else { $('hello').textContent = id.nom.split(' ')[0]; show('home'); primeGeo(); }
+  }
+
+  // Ouvre l'écran identité en mode première inscription ('first') ou modification ('edit')
+  function openSetup(mode){
+    const id = getId();
+    if(mode === 'edit' && id){
+      $('mat').value = id.matricule;
+      $('nom').value = id.nom;
+      $('setup-title').textContent = 'Modifier mon identité';
+      $('setup-sub').textContent = 'Corrige ton matricule ou ton nom, puis enregistre.';
+      $('cancel-edit').style.display = 'block';
+    } else {
+      $('mat').value = '';
+      $('nom').value = '';
+      $('setup-title').textContent = 'Configurer mon profil';
+      $('setup-sub').textContent = 'Une seule fois. Ces infos restent sur ton téléphone.';
+      $('cancel-edit').style.display = 'none';  // rien à annuler à la première inscription
+    }
+    show('setup');
   }
 
   $('save-id').onclick = function(){
@@ -158,12 +178,8 @@
     setId({matricule:mat, nom:nom});
     boot();
   };
-  $('edit-id').onclick = function(){
-    const id = getId();
-    $('mat').value = id ? id.matricule : '';
-    $('nom').value = id ? id.nom : '';
-    show('setup');
-  };
+  $('edit-id').onclick = function(){ openSetup('edit'); };
+  $('cancel-edit').onclick = function(){ show('home'); };  // retour sans rien changer
 
   /* ---- Scan ---- */
   let html5Qr = null, pendingType = 'in', busy = false;
