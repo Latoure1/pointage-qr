@@ -1,6 +1,6 @@
 /* Service worker minimal : rend la PWA installable et sert l'app shell.
    Le scan nécessite le réseau (envoi au serveur), donc pas de cache agressif. */
-const CACHE = 'pointage-v2';
+const CACHE = 'pointage-v3';
 const SHELL = ['index.html', 'manifest.json'];
 
 self.addEventListener('install', function (e) {

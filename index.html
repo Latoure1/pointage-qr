@@ -134,7 +134,7 @@
 
 <script>
   /* ⬇️ REMPLACE par l'URL de TON déploiement Apps Script (finit par /exec) */
-  const API_URL = "https://script.google.com/macros/s/AKfycbx8vXQDFS3Ga7TEIAgewWFFU4BGXVnGAAARzrhBfQ_Y6bILmjoZ7Vn0fASZi7f5oIZA/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbwvoDbLKd1LcYW4mtqlOAq0A1ycYOtVwxJy7VL5ak6-wzvnOG-QnNmbZMtWe8PSh-sc/exec";
 
   const $ = function(id){ return document.getElementById(id); };
   const screens = ['setup','home','scan','result'];
@@ -146,6 +146,19 @@
   function getId(){ try{ return JSON.parse(localStorage.getItem('pointage_id')); }catch(e){ return null; } }
   function setId(o){ localStorage.setItem('pointage_id', JSON.stringify(o)); }
 
+  /* ---- Identifiant unique de cet appareil (généré une fois, jamais effacé par l'app) ----
+     Sert au verrou serveur : 1 matricule = 1 téléphone, 1 téléphone = 1 matricule. */
+  function getDeviceId(){
+    let d = localStorage.getItem('pointage_device');
+    if(!d){
+      d = (window.crypto && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
+      localStorage.setItem('pointage_device', d);
+    }
+    return d;
+  }
+
   function boot(){
     const id = getId();
     if(!id){ openSetup('first'); }
@@ -155,17 +168,27 @@
   // Ouvre l'écran identité en mode première inscription ('first') ou modification ('edit')
   function openSetup(mode){
     const id = getId();
+    // Le matricule est verrouillé dès qu'un pointage a été validé (liaison serveur établie)
+    const verrouille = localStorage.getItem('pointage_bound') === '1';
     if(mode === 'edit' && id){
       $('mat').value = id.matricule;
       $('nom').value = id.nom;
       $('setup-title').textContent = 'Modifier mon identité';
-      $('setup-sub').textContent = 'Corrige ton matricule ou ton nom, puis enregistre.';
+      $('setup-sub').textContent = verrouille
+        ? 'Ton matricule est lié à ce téléphone. Seul le nom reste modifiable — vois l\'administrateur pour changer de matricule.'
+        : 'Corrige ton matricule ou ton nom, puis enregistre.';
+      $('mat').readOnly = verrouille;
+      $('mat').style.background = verrouille ? '#efece5' : '#fff';
+      $('mat').style.color      = verrouille ? '#6b7890' : '';
       $('cancel-edit').style.display = 'block';
     } else {
       $('mat').value = '';
       $('nom').value = '';
       $('setup-title').textContent = 'Configurer mon profil';
       $('setup-sub').textContent = 'Une seule fois. Ces infos restent sur ton téléphone.';
+      $('mat').readOnly = false;
+      $('mat').style.background = '#fff';
+      $('mat').style.color = '';
       $('cancel-edit').style.display = 'none';  // rien à annuler à la première inscription
     }
     show('setup');
@@ -292,7 +315,8 @@
     const id = getId();
     const payload = {
       matricule:id.matricule, nom:id.nom, token:token, type:pendingType,
-      lat:coords.lat || '', lng:coords.lng || ''
+      lat:coords.lat || '', lng:coords.lng || '',
+      deviceId: getDeviceId()
     };
     try{
       // Content-Type "text/plain" => requête simple, pas de preflight CORS avec Apps Script
@@ -310,6 +334,7 @@
 
   function showResult(data){
     const ok = data.status === 'ok';
+    if(ok){ localStorage.setItem('pointage_bound', '1'); }  // liaison serveur confirmée
     const card = $('result-card');
     card.className = 'result-card ' + (ok ? 'ok' : 'err');
     $('result-ico').textContent = ok ? '✓' : '✕';
